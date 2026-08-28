@@ -6,7 +6,7 @@ From mathcomp Require Import boolp classical_sets.
 From mathcomp Require Import fsbigop functions reals topology separation_axioms.
 From mathcomp Require Import ereal sequences numfun measure measurable_realfun.
 From mathcomp Require Import lebesgue_measure lebesgue_integral.
-
+    
 (**md**************************************************************************)
 (* # The Giry monad                                                           *)
 (*                                                                            *)
@@ -43,7 +43,7 @@ Import Order.TTheory GRing.Theory Num.Def Num.Theory.
 Import HBNNSimple MeasurableR.
 
 (*********************)
-HB.mixin Record isMeasurableSet (d : measure_display) (T : semiRingOfSetsType d) (A : set T) :={
+HB.mixin Record isMeasurableSet (d : measure_display) (T : measurableType d) (A : set T) :={
   mset_is_measurable : measurable A
 }.
 
@@ -52,29 +52,28 @@ HB.structure Definition MeasurableSet d T := { A of isMeasurableSet d T A }.
 
 Section mset.
 Local Open Scope classical_set_scope.
-Lemma msetT_measurable (d : measure_display) (T : semiRingOfSetsType d) :
-  [set: mset T] = measurable.
+Lemma msetT_measurable (d : measure_display) (T : measurableType d) : [set: mset T] = measurable.
 apply seteqP.
 split => x //= _.
 by exact: mset_is_measurable.
 Qed.
 End mset.
 
-Section mset_of.
+Section to_mset.
 Variable d : measure_display.
-Variable T : semiRingOfSetsType d.
+Variable T : measurableType d.
 Variable A : set T.
 Variable m : measurable A.
 Definition mset_of : mset T := MeasurableSet.pack_ (isMeasurableSet.Build _ _ A m).
-End mset_of.
+End to_mset.
 
 Section mset_instances.
 Local Open Scope classical_set_scope.
 
-HB.instance Definition _ d (T : semiRingOfSetsType d) :=
+HB.instance Definition _ d (T : measurableType d) :=
   isMeasurableSet.Build _ _ set0 (@measurable0 d T).
 
-HB.instance Definition _ d (T : algebraOfSetsType d) :=
+HB.instance Definition _ d (T : measurableType d) :=
   isMeasurableSet.Build _ _ setT (@measurableT d T).
 
 Section mfun.
@@ -95,7 +94,7 @@ HB.instance Definition _ (R : realType) (r : R) :=
 End MeasurableR_mset_instances.
 
 Section msetX.
-Variables (d1 d2 : measure_display) (T1 : semiRingOfSetsType d1) (T2 : semiRingOfSetsType d2).
+Variables (d1 d2 : measure_display) (T1 : measurableType d1) (T2 : measurableType d2).
 Variable (A : set T1) (mA : measurable A) (B : set T2) (mB : measurable B).
 
 HB.instance Definition _ := isMeasurableSet.Build _ _ (A `*` B) (measurableX mA mB).
@@ -103,15 +102,34 @@ End msetX.
 
 End mset_instances.
 
+Section TheSubprobabilitymeasure.
+  Variable d : measure_display.
+  Variable T : measurableType d.
+  Variable A : mset T.
+  Variable R : realType.
+  Definition ext (mu : mset T -> \bar R) (A : set T) : \bar R :=
+    if pselect (measurable A) is left H
+    then mu (mset_of H) else 0%:E.
+  Definition rest (mu : set T -> \bar R) (A : mset T) : \bar R :=
+    mu A.
+ 
+End TheSubprobabilitymeasure.
+
+HB.mixin Record isTheSubProbability d (T : measurableType d) (R : realType)
+  (mu : mset T -> \bar R) := {
+    ext_mu : @subprobability d T R;
+    eq_ext : @ext d T R mu = ext_mu
+  }.
+
+#[short(type=thesubprobability)]
+HB.structure Definition TheSubProbability d (T : measurableType d) (R : realType)
+  := {mu of isTheSubProbability d T R mu }.
+
+Arguments ext_mu {d T R}.
+
+(* Coercion ext_mu : thesubprobability >-> subprobability. *)
+
 (*********************)
-
-
-Definition measure_eq {d} {T : measurableType d} {R : realType} :
-  measure T R -> measure T R -> Prop :=
-  fun m1 m2 => forall S : set T, measurable S -> m1 S = m2 S.
-Notation "x ≡μ y" := (measure_eq x y) (at level 70).
-
-Global Hint Extern 0 (_ ≡μ _) => reflexivity : core.
 
 Local Open Scope classical_set_scope.
 Local Open Scope ereal_scope.
@@ -241,7 +259,7 @@ Proof. by rewrite /preimage; apply/seteqP; split => [[a b]|[a b]]//= []. Qed.
 Section giry_def.
 Context d (T : measurableType d) (R : realType).
 
-Definition giry : Type := @subprobability d T R.
+Definition giry : Type := @thesubprobability d T R.
 
 HB.instance Definition _ := gen_eqMixin giry.
 HB.instance Definition _ := gen_choiceMixin giry.
@@ -312,8 +330,18 @@ End giry_ev_measurable.
 Section giry_integral.
 Context {d} {T : measurableType d} {R : realType}.
 
-Definition giry_int (mu : giry T R) (f : T -> \bar R) := \int[mu]_x f x.
+Definition giry_int (mu : giry T R) (f : T -> \bar R) := \int[ext_mu mu]_x f x.
 
+Lemma ext_mu_giry_ev mu (A : set T) (mA : measurable A) :
+  ext_mu mu A = giry_ev (mset_of mA) mu :> \bar R.
+Proof.
+  rewrite -eq_ext.
+  rewrite /ext.
+  case:pselect => // mA'.
+  rewrite /giry_ev.
+  congr (mu (mset_of _)).
+  exact: Prop_irrelevance.
+Qed.
 (**md The idea is to reconstruct f from simple functions, then use measurability
   of giry_ev. Reference: Tom Avery. Codensity and the Giry monad.
   https://arxiv.org/pdf/1410.4432.
@@ -330,10 +358,11 @@ have mintgE n : measurable_fun [set: giry T R] (intEg n).
   rewrite /intEg /giry_int/=.
   under eq_fun do rewrite integralT_nnsfun sintegralE.
   apply: emeasurable_fsum => //= r.
-  apply: measurable_funeM.
+  apply: measurable_funeM => /=.
+  under [X in measurable_fun _ X]funext do rewrite ext_mu_giry_ev.
   exact: measurable_giry_ev.
 apply: (emeasurable_fun_cvg _ (giry_int ^~ f) mintgE) => mu _.
-rewrite (_ : giry_int mu f = \int[mu]_x limn (Eg ^~ x)).
+rewrite (_ : giry_int mu f = \int[ext_mu mu]_x limn (Eg ^~ x)).
   apply: eq_integral => t _.
   by apply/esym/cvg_lim  => //; exact/cvg_nnsfun_approx.
 apply: cvg_monotone_convergence => //.
@@ -351,13 +380,22 @@ Context d1 {T1 : measurableType d1}.
 Lemma measurable_giry_codensity d2 {T2 : measurableType d2} {R : realType}
     (D : set T1) (f : T1 -> giry T2 R) :
   measurable D ->
-  (forall B, measurable B -> measurable_fun D (f ^~ B)) ->
+  (forall B (mB : measurable B), measurable_fun D (f ^~ (mset_of mB))) ->
   measurable_fun D f.
 Proof.
 move=> mD mf.
 pose G : set_system (giry T2 R) := \bigcup_(B in [set: mset T2]) preimg_giry_ev B.
 apply: (measurability G) => //= _ [_ [C mC [Z mZ] <-] <-].
-rewrite setTI.
+rewrite setTI => //=.
+rewrite msetT_measurable in mC.
+rewrite /giry_ev /preimage /mkset => //=.
+move: mf.
+rewrite /mset_of /measurable_fun //=.
+rewrite /preimage /mkset => //=.
+
+move:rewrite /mset_of in mf => //=.
+Check (mf C mC).
+
 apply: mf => //.
 exact: mset_is_measurable.
 Qed.
@@ -628,26 +666,26 @@ Context d1 d2 d3
 Lemma giry_map_id (x : giry T1 R):
   giry_map idfun x ≡μ @idfun (giry T1 R) x.
 Proof.
-move => U H /=.
-rewrite /pushforward.
-rewrite /preimage /=.
-exact.
+  move => U H /=.
+  rewrite /pushforward.
+  rewrite /preimage /=.
+  exact.
 Qed.
 
 (* G (g o f) = G g o G f *)
 Lemma giry_map_comp (x : giry T1 R) :
-giry_map (g \o f) x ≡μ (giry_map g \o giry_map f) x.
-move => U H /=.
-rewrite /pushforward.
-by rewrite /preimage /=.
+  giry_map (g \o f) x ≡μ (giry_map g \o giry_map f) x.
+  move => U H /=.
+  rewrite /pushforward.
+  by rewrite /preimage /=.
 Qed.
 
 (* Naturality of return *)
 Lemma giry_ret_natural (x : T1) :
   (giry_map f \o (@giry_ret _ _ R)) x ≡μ (giry_ret \o f) x.
 Proof.
-move => U H /=.
-by rewrite /dirac /= /pushforward /indic /preimage.
+  move => U H /=.
+  by rewrite /dirac /= /pushforward /indic /preimage.
 Qed.
 
 (* Naturality of join *)
@@ -842,7 +880,7 @@ End giry_tensorator_axioms.
 Section monoidal_giry_ret_join.
 Context {d1} {d2} {X : measurableType d1} {Y : measurableType d2}
   {R : realType}.
-
+  
 Lemma giry_ret_monoidal (xy : X * Y) :
   (@giry_tensorator _ _ _ _ R \o (giry_ret \X giry_ret)) xy ≡μ giry_ret xy.
 Proof.
@@ -860,14 +898,23 @@ Lemma giry_join_monoidal (c : giry (giry X R) R * giry (giry Y R) R) :
 Proof.
 case: c => a b.
 move=> U mU.
-rewrite /giry_tensorator/=.
+rewrite /giry_tensorator (*/giry_join /giry_join*). (* NB: don't /= here*)
 apply: product_measure_unique => //= A B mA mB.
 have ? := measurableX mA mB.
-rewrite !giry_joinE// /giry_int /giry_map ge0_integral_pushforward//=.
+rewrite giry_joinE// /giry_int /giry_map ge0_integral_pushforward//=.
 rewrite fubini_tonelli1//=.
 have mAB : measurable (A `*` B) by apply: measurableX.
-  by rewrite [X in measurable_fun _ X](_ : _ = @giry_ev _ _ R (A `*` B) \o giry_tensorator).
-rewrite -ge0_integralZr// ?integral_ge0//.
+  (* Check @giry_ev _ _ R (A `*` B) \o giry_tensorator  : {mfun _ >-> _}. *)
+  (* giry X R * giry Y R -> GRing.BaseAddMagma.sort \bar R *)
+  Check (fun z : giry X R * giry Y R => (z.1 \x z.2) (A `*` B)). 
+  rewrite [X in measurable_fun _ X](_ : _ = @giry_ev _ _ R (A `*` B) \o giry_tensorator).
+    by rewrite //.
+  apply: measurableT_comp.
+    exact: measurable_giry_ev.
+  by [].  
+rewrite !giry_joinE.
+rewrite -ge0_integralZr//.
+  exact: integral_ge0.
 apply: eq_integral => /= x _.
 rewrite /fubini_F/= -ge0_integralZl//.
 apply: eq_integral => /= y _.
