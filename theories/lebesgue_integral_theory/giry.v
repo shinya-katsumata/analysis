@@ -1,3 +1,4 @@
+
 From HB Require Import structures.
 From mathcomp Require Import boot order algebra.
 #[warning="-warn-library-file-internal-analysis"]
@@ -50,22 +51,29 @@ HB.mixin Record isMeasurableSet (d : measure_display) (T : measurableType d) (A 
 #[short(type="mset")]
 HB.structure Definition MeasurableSet d T := { A of isMeasurableSet d T A }.
 
+Arguments mset_is_measurable {d T}.
+
 Section mset.
 Local Open Scope classical_set_scope.
-Lemma msetT_measurable (d : measure_display) (T : measurableType d) : [set: mset T] = measurable.
+
+Context (d : measure_display) (T : measurableType d).
+
+Lemma msetT_measurable : [set: mset T] = measurable.
 apply seteqP.
 split => x //= _.
 by exact: mset_is_measurable.
 Qed.
-End mset.
 
-Section to_mset.
-Variable d : measure_display.
-Variable T : measurableType d.
-Variable A : set T.
-Variable m : measurable A.
-Definition mset_of : mset T := MeasurableSet.pack_ (isMeasurableSet.Build _ _ A m).
-End to_mset.
+Definition mset_of (A : set T) (m : measurable A) :=
+  MeasurableSet.Pack A (isMeasurableSet.Build d T A m).
+
+
+Lemma mset_eta (d : measure_display) (T : measurableType d) (C : mset T) :
+  mset_of (mset_is_measurable C) = C.
+  rewrite /mset_of /mset_is_measurable.
+  case C => [] s [] /= [] /= z.
+  Set Printing All.
+  rewrite /@MeasurableSet.Pack.
 
 Section mset_instances.
 Local Open Scope classical_set_scope.
@@ -387,16 +395,10 @@ move=> mD mf.
 pose G : set_system (giry T2 R) := \bigcup_(B in [set: mset T2]) preimg_giry_ev B.
 apply: (measurability G) => //= _ [_ [C mC [Z mZ] <-] <-].
 rewrite setTI => //=.
-rewrite msetT_measurable in mC.
-rewrite /giry_ev /preimage /mkset => //=.
-move: mf.
-rewrite /mset_of /measurable_fun //=.
-rewrite /preimage /mkset => //=.
+move: (mf C (mset_is_measurable C)) => //=.
+rewrite  /measurable_fun /preimage /mkset /giry_ev /= => V.
+move:(V mD Z mZ).
 
-move:rewrite /mset_of in mf => //=.
-Check (mf C mC).
-
-apply: mf => //.
 exact: mset_is_measurable.
 Qed.
 
