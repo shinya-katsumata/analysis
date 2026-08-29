@@ -118,9 +118,10 @@ HB.instance Definition _ :=
   isMeasurableSet.Build _ _ (A `*` B)
     (measurableX (mset_is_measurable A) (mset_is_measurable B)).
 End Product_of_mset_is_mset_instance.
-
 End mset_instances.
 
+
+(*********************)
 Section TheSubprobabilitymeasure.
   Variable d : measure_display.
   Variable T : measurableType d.
@@ -428,9 +429,9 @@ End measurable_giry_codensity.
 Section giry_map.
 Context {d1} {d2} {T1 : measurableType d1} {T2 : measurableType d2}
   {R : realType}.
-Variables (f : {mfun T1 >-> T2}) (mu1 : giry T1 R).
+Variables (f : {mfun T1 >-> T2}) (mu1 : @subprobability d1 T1 R).
 
-Let map := fun (U : mset T2) => mu1 (f @^-1` U).
+Let map := pushforward mu1 f.
 
 Let map0 : map set0 = 0.
 Proof.
