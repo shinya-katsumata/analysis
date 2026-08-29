@@ -53,10 +53,14 @@ HB.structure Definition MeasurableSet d T := { A of isMeasurableSet d T A }.
 
 Arguments mset_is_measurable {d T}.
 
-Section mset.
-Local Open Scope classical_set_scope.
+Definition mset_of {d : measure_display} (T : measurableType d) (A : set T) (m : measurable A) : mset T :=
+  MeasurableSet.Pack (MeasurableSet.Class (isMeasurableSet.Build d T A m)).
 
-Context (d : measure_display) (T : measurableType d).
+Section mset.
+Variable d : measure_display.
+Variable T : measurableType d.
+
+Local Open Scope classical_set_scope.
 
 Lemma msetT_measurable : [set: mset T] = measurable.
 apply seteqP.
@@ -64,49 +68,56 @@ split => x //= _.
 by exact: mset_is_measurable.
 Qed.
 
-Definition mset_of (A : set T) (m : measurable A) :=
-  MeasurableSet.Pack A (isMeasurableSet.Build d T A m).
-
-
-Lemma mset_eta (d : measure_display) (T : measurableType d) (C : mset T) :
+Lemma mset_eta (C : mset T) :
   mset_of (mset_is_measurable C) = C.
   rewrite /mset_of /mset_is_measurable.
   case C => [] s [] /= [] /= z.
-  Set Printing All.
-  rewrite /@MeasurableSet.Pack.
+  congr (_ _).
+Qed.
+End mset.
 
 Section mset_instances.
 Local Open Scope classical_set_scope.
-
-HB.instance Definition _ d (T : measurableType d) :=
-  isMeasurableSet.Build _ _ set0 (@measurable0 d T).
-
-HB.instance Definition _ d (T : measurableType d) :=
-  isMeasurableSet.Build _ _ setT (@measurableT d T).
-
-Section mfun.
 Variables (d1 d2 : measure_display) (T1 : measurableType d1) (T2 : measurableType d2).
-Variable (f : {mfun T1 >-> T2}) (A : set T2) (mA : measurable A).
+
+(*********************)
+Section Empty_is_mset_instance.
+HB.instance Definition _  :=
+  isMeasurableSet.Build _ _ set0 (@measurable0 d1 T1).
+End Empty_is_mset_instance.
+
+(*********************)
+Section Total_is_mset_instance.
+HB.instance Definition _  :=
+  isMeasurableSet.Build _ _ setT (@measurableT d1 T1).
+End Total_is_mset_instance.
+
+(*********************)
+Section Preimage_of_mset_is_mset_instance.
+Variable (f : {mfun T1 >-> T2}) (A : mset T2).
 
 Let mfunP : measurable (f @^-1` A).
 Proof.
-have := measurable_funPT f measurableT A mA.
+have := measurable_funPT f measurableT A (mset_is_measurable A).
 by rewrite setTI.
 Qed.
 HB.instance Definition _ := isMeasurableSet.Build _ _ (f @^-1` A) mfunP.
-End mfun.
+End Preimage_of_mset_is_mset_instance.
 
-Section MeasurableR_mset_instances.
+(*********************)
+Section R_singleton_is_mset_instance.
 HB.instance Definition _ (R : realType) (r : R) :=
   isMeasurableSet.Build _ _ [set r] (measurable_set1 r).
-End MeasurableR_mset_instances.
+End R_singleton_is_mset_instance.
 
-Section msetX.
-Variables (d1 d2 : measure_display) (T1 : measurableType d1) (T2 : measurableType d2).
-Variable (A : set T1) (mA : measurable A) (B : set T2) (mB : measurable B).
+(*********************)
+Section Product_of_mset_is_mset_instance.
+Variable (A : mset T1) (B : mset T2).
 
-HB.instance Definition _ := isMeasurableSet.Build _ _ (A `*` B) (measurableX mA mB).
-End msetX.
+HB.instance Definition _ :=
+  isMeasurableSet.Build _ _ (A `*` B)
+    (measurableX (mset_is_measurable A) (mset_is_measurable B)).
+End Product_of_mset_is_mset_instance.
 
 End mset_instances.
 
@@ -120,7 +131,6 @@ Section TheSubprobabilitymeasure.
     then mu (mset_of H) else 0%:E.
   Definition rest (mu : set T -> \bar R) (A : mset T) : \bar R :=
     mu A.
- 
 End TheSubprobabilitymeasure.
 
 HB.mixin Record isTheSubProbability d (T : measurableType d) (R : realType)
@@ -396,10 +406,8 @@ pose G : set_system (giry T2 R) := \bigcup_(B in [set: mset T2]) preimg_giry_ev 
 apply: (measurability G) => //= _ [_ [C mC [Z mZ] <-] <-].
 rewrite setTI => //=.
 move: (mf C (mset_is_measurable C)) => //=.
-rewrite  /measurable_fun /preimage /mkset /giry_ev /= => V.
-move:(V mD Z mZ).
-
-exact: mset_is_measurable.
+rewrite mset_eta /measurable_fun /preimage /mkset /giry_ev //= => V.
+by move:(V mD Z mZ).
 Qed.
 
 Lemma mset_giry_codensity d2 {T2 : measurableType d2} {R : realType}
@@ -422,9 +430,12 @@ Context {d1} {d2} {T1 : measurableType d1} {T2 : measurableType d2}
   {R : realType}.
 Variables (f : {mfun T1 >-> T2}) (mu1 : giry T1 R).
 
-Let map := pushforward mu1 f.
+Let map := fun (U : mset T2) => mu1 (f @^-1` U).
 
-Let map0 : map set0 = 0. Proof. exact: measure0. Qed.
+Let map0 : map set0 = 0.
+Proof.
+  exact (measure0 mu1).
+Qed.
 
 Let map_ge0 A : 0 <= map A. Proof. exact: measure_ge0. Qed.
 
