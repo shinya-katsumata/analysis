@@ -1,4 +1,3 @@
-
 From HB Require Import structures.
 From mathcomp Require Import boot order algebra.
 #[warning="-warn-library-file-internal-analysis"]
@@ -101,7 +100,8 @@ Proof.
 have := measurable_funPT f measurableT A (mset_is_measurable A).
 by rewrite setTI.
 Qed.
-HB.instance Definition _ := isMeasurableSet.Build _ _ (f @^-1` A) mfunP.
+HB.instance Definition _ :=
+  isMeasurableSet.Build _ _ (f @^-1` A) mfunP.
 End Preimage_of_mset_is_mset_instance.
 
 (*********************)
@@ -125,13 +125,22 @@ End mset_instances.
 Section TheSubprobabilitymeasure.
   Variable d : measure_display.
   Variable T : measurableType d.
-  Variable A : mset T.
   Variable R : realType.
   Definition ext (mu : mset T -> \bar R) (A : set T) : \bar R :=
     if pselect (measurable A) is left H
     then mu (mset_of H) else 0%:E.
   Definition rest (mu : set T -> \bar R) (A : mset T) : \bar R :=
     mu A.
+  Lemma ext_rest (mu : @subprobability d T R) : forall (A : mset T), ext (rest mu) A = mu A.
+    move => A.
+    move: (mset_is_measurable A) => B.
+    rewrite /ext /rest => //=.
+    case: pselect => [Q | ].
+    reflexivity.
+    move => nB.
+    move : (nB B).
+    by [].
+  Qed.
 End TheSubprobabilitymeasure.
 
 HB.mixin Record isTheSubProbability d (T : measurableType d) (R : realType)
@@ -146,6 +155,23 @@ HB.structure Definition TheSubProbability d (T : measurableType d) (R : realType
 
 Arguments ext_mu {d T R}.
 
+(*********************)
+Section TheSubprobabilitymeasure.
+  Variable d : measure_display.
+  Variable T : measurableType d.
+  Variable R : realType.
+  Variable mu : subprobability T R.
+  Qed.
+End TheSubprobabilitymeasure.
+
+Section TheSubprobabilitymeasure.
+  Variable d : measure_display.
+  Variable T : measurableType d.
+  Variable R : realType.
+
+  HB.instafnce Definition _ (mu : @subprobability d T R) :=
+    isTheSubProbability.Build d T R (rmu d T R mu).
+    
 (* Coercion ext_mu : thesubprobability >-> subprobability. *)
 
 (*********************)
@@ -457,7 +483,7 @@ Proof. by rewrite /map /pushforward /= sprobability_setT. Qed.
 
 HB.instance Definition _ := Measure_isSubProbability.Build _ _ _ map map_setT.
 
-Definition giry_map : giry T2 R := map.
+Definition giry_map : giry T2 R := ext (rest map).
 
 End giry_map.
 
