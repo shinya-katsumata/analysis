@@ -155,27 +155,6 @@ HB.structure Definition TheSubProbability d (T : measurableType d) (R : realType
 
 Arguments ext_mu {d T R}.
 
-(*********************)
-Section TheSubprobabilitymeasure.
-  Variable d : measure_display.
-  Variable T : measurableType d.
-  Variable R : realType.
-  Variable mu : subprobability T R.
-  Qed.
-End TheSubprobabilitymeasure.
-
-Section TheSubprobabilitymeasure.
-  Variable d : measure_display.
-  Variable T : measurableType d.
-  Variable R : realType.
-
-  HB.instafnce Definition _ (mu : @subprobability d T R) :=
-    isTheSubProbability.Build d T R (rmu d T R mu).
-    
-(* Coercion ext_mu : thesubprobability >-> subprobability. *)
-
-(*********************)
-
 Local Open Scope classical_set_scope.
 Local Open Scope ereal_scope.
 
@@ -483,7 +462,12 @@ Proof. by rewrite /map /pushforward /= sprobability_setT. Qed.
 
 HB.instance Definition _ := Measure_isSubProbability.Build _ _ _ map map_setT.
 
-Definition giry_map : giry T2 R := ext (rest map).
+Definition giry_map : giry T2 R.
+  exists (rest map).
+  constructor.
+  exists map.
+  
+  
 
 End giry_map.
 
