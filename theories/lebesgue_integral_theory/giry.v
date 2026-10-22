@@ -42,6 +42,9 @@ Unset Printing Implicit Defensive.
 Import Order.TTheory GRing.Theory Num.Def Num.Theory.
 Import HBNNSimple MeasurableR.
 
+Local Open Scope classical_set_scope.
+Local Open Scope ereal_scope.
+
 (*********************)
 HB.mixin Record isMeasurableSet (d : measure_display) (T : measurableType d) (A : set T) :={
   mset_is_measurable : measurable A
@@ -54,6 +57,7 @@ Arguments mset_is_measurable {d T}.
 
 Definition mset_of {d : measure_display} (T : measurableType d) (A : set T) (m : measurable A) : mset T :=
   MeasurableSet.Pack (MeasurableSet.Class (isMeasurableSet.Build d T A m)).
+Arguments mset_of {d} {T}.
 
 Section mset.
 Variable d : measure_display.
@@ -67,11 +71,16 @@ split => x //= _.
 by exact: mset_is_measurable.
 Qed.
 
-Lemma mset_eta (C : mset T) :
-  mset_of (mset_is_measurable C) = C.
-  rewrite /mset_of /mset_is_measurable.
-  case C => [] s [] /= [] /= z.
+Lemma mset_eta (C : mset T) (Pi : measurable C) :
+  mset_of C Pi = C.
+  rewrite /mset_of.
+  destruct C.
   congr (_ _).
+  destruct class.
+  congr (_ _).
+  destruct giry_isMeasurableSet_mixin.
+  congr (_ _).
+  apply: Prop_irrelevance.
 Qed.
 End mset.
 
@@ -128,12 +137,19 @@ Section TheSubprobabilitymeasure.
   Variable R : realType.
   Definition ext (mu : mset T -> \bar R) (A : set T) : \bar R :=
     if pselect (measurable A) is left H
-    then mu (mset_of H) else 0%:E.
+    then mu (mset_of _ H) else 0%:E.
   Definition rest (mu : set T -> \bar R) (A : mset T) : \bar R :=
     mu A.
-  Lemma ext_rest (mu : @subprobability d T R) : forall (A : mset T), ext (rest mu) A = mu A.
+  Lemma rest_ext (mu : mset T -> \bar R) : forall (A : mset T), rest (ext mu) A = mu A.
     move => A.
     move: (mset_is_measurable A) => B.
+    rewrite /ext /rest => //=.
+    case: pselect => [Q | ].
+    - by rewrite mset_eta.
+    - by [].
+  Qed.
+  Lemma ext_rest (mu : set T -> \bar R) : forall (A : set T), measurable A -> ext (rest mu) A = mu A.
+    move => A B.
     rewrite /ext /rest => //=.
     case: pselect => [Q | ].
     reflexivity.
@@ -141,6 +157,13 @@ Section TheSubprobabilitymeasure.
     move : (nB B).
     by [].
   Qed.
+
+  Lemma ext_rest_mset (mu : set T -> \bar R) : forall (A : mset T), ext (rest mu) A = mu A.
+    move => A.
+    have B:=mset_is_measurable A.
+    exact: ext_rest.
+  Qed.
+    
 End TheSubprobabilitymeasure.
 
 HB.mixin Record isTheSubProbability d (T : measurableType d) (R : realType)
@@ -155,8 +178,107 @@ HB.structure Definition TheSubProbability d (T : measurableType d) (R : realType
 
 Arguments ext_mu {d T R}.
 
-Local Open Scope classical_set_scope.
-Local Open Scope ereal_scope.
+Section ext_instance.
+Variable d : measure_display.
+Variable T : measurableType d.
+Variable R : realType.
+Variable mu : @thesubprobability d T R.
+Let ext_measure0 : ext mu set0 = 0.
+  rewrite eq_ext.
+  by rewrite measure0.
+  Qed.
+Let ext_measure_ge0  : forall x, (0 <= ext mu x)%E.
+  move => x.
+  rewrite eq_ext.
+  exact: measure_ge0.
+Qed.
+Let ext_measure_semi_sigma_additive : semi_sigma_additive (ext mu).
+  rewrite eq_ext.
+  exact: measure_semi_sigma_additive.
+Qed.
+Let ext_sprobability_setT : (ext mu setT <= 1)%E.
+  rewrite eq_ext.
+  exact: sprobability_setT.
+Qed.
+
+HB.instance Definition _ :=
+  @isMeasure.Build d T R (ext mu)
+    ext_measure0
+    ext_measure_ge0
+    ext_measure_semi_sigma_additive.
+HB.instance Definition _ :=
+  @Measure_isSubProbability.Build d T R (ext mu)
+    ext_sprobability_setT.
+End ext_instance.
+
+Section rest_instance.
+Variable d : measure_display.
+Variable T : measurableType d.
+Variable R : realType.
+Variable mu : @subprobability d T R.
+
+Definition norm := ext (rest mu).
+
+Let norm_eq_ext : @ext d T R (rest (ext (rest mu))) = (ext (rest mu)).
+  apply: funext => A.
+  rewrite {1}/ext [in RHS]/ext.
+  case:pselect => //U.
+  by rewrite rest_ext.
+Qed.  
+
+Let norm_measure0 : norm set0 = 0.
+  rewrite /norm /ext.
+  case: pselect => // U.
+  rewrite /rest /=.
+  exact: measure0.
+Qed.
+Let norm_measure_ge0  : forall x, (0 <= norm x)%E.
+  move => x.
+  rewrite /norm /ext.
+  case: pselect => //.
+Qed.
+Let norm_measure_semi_sigma_additive : semi_sigma_additive norm.
+  move => U H1 H2 H3.
+  under [X in fmap X]funext => n.
+    under eq_bigr => i _.
+    rewrite (_ : norm (U i) = mu (U i)).
+      rewrite /norm /ext.
+      case: pselect => // V.
+      over.
+    over.
+
+  rewrite -/(subset _ _).
+  rewrite -/(cvg_to _ _).
+  
+  rewrite (_ : norm (\bigcup_n U n) = mu (\bigcup_n U n)).
+    rewrite /norm /ext.
+    by case: pselect => // V.
+    
+  exact: measure_semi_sigma_additive.
+Qed.
+
+Let norm_sprobability_setT : (norm setT <= 1)%E.
+  rewrite /norm /ext.
+  case: pselect => // => U.
+  exact: sprobability_setT.
+Qed.
+
+HB.instance Definition _ :=
+  @isMeasure.Build d T R norm
+    norm_measure0
+    norm_measure_ge0
+    norm_measure_semi_sigma_additive.
+HB.instance Definition _ :=
+  @Measure_isSubProbability.Build d T R norm
+    norm_sprobability_setT.
+
+HB.instance Definition _ :=
+  @isTheSubProbability.Build d T R (rest norm) 
+    norm
+    norm_eq_ext.
+
+End rest_instance.
+
 
 Lemma g_sigma_algebraSP {T : Type} (X Y : set_system T) :
   sigma_algebra [set: T] Y ->
@@ -357,13 +479,13 @@ Context {d} {T : measurableType d} {R : realType}.
 Definition giry_int (mu : giry T R) (f : T -> \bar R) := \int[ext_mu mu]_x f x.
 
 Lemma ext_mu_giry_ev mu (A : set T) (mA : measurable A) :
-  ext_mu mu A = giry_ev (mset_of mA) mu :> \bar R.
+  ext_mu mu A = giry_ev (mset_of _ mA) mu :> \bar R.
 Proof.
   rewrite -eq_ext.
   rewrite /ext.
   case:pselect => // mA'.
   rewrite /giry_ev.
-  congr (mu (mset_of _)).
+  congr (mu (mset_of _ _)).
   exact: Prop_irrelevance.
 Qed.
 (**md The idea is to reconstruct f from simple functions, then use measurability
@@ -404,7 +526,7 @@ Context d1 {T1 : measurableType d1}.
 Lemma measurable_giry_codensity d2 {T2 : measurableType d2} {R : realType}
     (D : set T1) (f : T1 -> giry T2 R) :
   measurable D ->
-  (forall B (mB : measurable B), measurable_fun D (f ^~ (mset_of mB))) ->
+  (forall B (mB : measurable B), measurable_fun D (f ^~ (mset_of _ mB))) ->
   measurable_fun D f.
 Proof.
 move=> mD mf.
@@ -434,13 +556,14 @@ End measurable_giry_codensity.
 Section giry_map.
 Context {d1} {d2} {T1 : measurableType d1} {T2 : measurableType d2}
   {R : realType}.
-Variables (f : {mfun T1 >-> T2}) (mu1 : @subprobability d1 T1 R).
+Variables (f : {mfun T1 >-> T2}) (* (mu1 : @subprobability d1 T1 R). *)
+  (mu1 : giry T1 R).
 
-Let map := pushforward mu1 f.
+Let map := pushforward (ext mu1) f.
 
 Let map0 : map set0 = 0.
 Proof.
-  exact (measure0 mu1).
+  exact (measure0 (ext mu1)).
 Qed.
 
 Let map_ge0 A : 0 <= map A. Proof. exact: measure_ge0. Qed.
@@ -465,10 +588,19 @@ HB.instance Definition _ := Measure_isSubProbability.Build _ _ _ map map_setT.
 Definition giry_map : giry T2 R.
   exists (rest map).
   constructor.
-  exists map.
-  
-  
-
+  exists (norm map).
+  apply/funext=>x.
+  rewrite /ext /rest.
+  case:pselect.  
+  - move => U.
+    rewrite /mset_eta.
+    rewrite /norm /=.
+    by rewrite -ext_rest //.  (* Wiered why forward rewriting fails here? *)
+  - move => H1.
+    rewrite /norm /ext /=.
+    rewrite /norm /ext /=. (* Wiered *)
+    by case: pselect.
+Defined.
 End giry_map.
 
 Section giry_map_lemmas.
@@ -477,7 +609,8 @@ Implicit Type f : {mfun T1 >-> T2}.
 
 Let measurable_giry_map f : measurable_fun [set: giry T1 R] (giry_map f).
 Proof.
-rewrite /giry_map; apply: mset_giry_codensity => // B.
+  rewrite /giry_map; apply: mset_giry_codensity => // B //=.
+  about
 apply: measurable_giry_ev.
 exact: mset_is_measurable.
 Qed.
